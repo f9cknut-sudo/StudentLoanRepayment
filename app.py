@@ -902,8 +902,22 @@ HTML_TEMPLATE = r"""
 </div>
 {% endif %}
 
+<!-- Chart 5: Lump Sum Hypothetical -->
+{% if charts|length > 4 %}
+<div class="card reveal" style="--d:9">
+  <div class="sh">
+    <div class="sh-icon i-violet">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+    </div>
+    <h2>Lump Sum Hypothetical: Growth Over Time</h2>
+  </div>
+  <p class="chart-desc">Deterministic comparison: investing your full loan balance as a lump sum vs paying off the loan and reinvesting the freed mandatory payments. Uses your stated expected return, not Monte Carlo.</p>
+  <img class="chart-img" src="data:image/png;base64,{{ charts[4] }}" alt="Lump Sum Hypothetical">
+</div>
+{% endif %}
+
 <!-- Download PDF -->
-<div class="dl-section reveal" style="--d:6">
+<div class="dl-section reveal" style="--d:10">
   <a href="/download-pdf" class="btn btn-success">
     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
     Download PDF Report

@@ -170,6 +170,23 @@ def _page1_summary(inputs: SimInputs, d: Dict, verdict_text: str,
         fig.text(0.10, y, line, fontsize=9.5, color=TEXT2)
         y -= 0.024
 
+    # Freed cashflow reinvestment
+    if d["a_years_investing"] > 0:
+        y -= 0.008
+        fig.text(0.10, y, "Freed Cashflow Reinvested After Loan Clears:",
+                 fontsize=9, color=INDIGO, fontweight="bold")
+        y -= 0.022
+        freed_lines = [
+            f"\u00a3{d['a_freed_overpayment']:,.0f}/mo overpayment + "
+            f"\u00a3{d['a_freed_mandatory']:,.0f}/mo mandatory = "
+            f"\u00a3{d['a_monthly_invest']:,.0f}/mo total reinvested",
+            f"Duration: {d['a_years_investing']:.0f} years  |  "
+            f"Total contributions: \u00a3{d['a_total_reinvested']:,.0f}",
+        ]
+        for line in freed_lines:
+            fig.text(0.12, y, line, fontsize=8.5, color=TEXT2)
+            y -= 0.021
+
     # Option B
     y -= 0.025
     fig.text(0.08, y,
@@ -211,9 +228,29 @@ def _page1_summary(inputs: SimInputs, d: Dict, verdict_text: str,
         fig.text(0.10, y, line, fontsize=9, color=TEXT2)
         y -= 0.022
 
+    # Invest-favorable threshold
+    y -= 0.025
+    fig.text(0.08, y, "Invest-Favorable Threshold",
+             fontsize=13, color=EMERALD, fontweight="bold")
+    y -= 0.028
+    if d.get("invest_favorable_below") is not None:
+        threshold_text = (
+            f"Investing is favorable below "
+            f"\u00a3{d['invest_favorable_below']:,.0f}/mo. "
+            f"You'd need to overpay \u00a3{d['invest_favorable_below']:,.0f}/mo+ "
+            f"to beat investing."
+        )
+    else:
+        threshold_text = (
+            f"Investing is favorable at every level tested "
+            f"(up to \u00a3{d['invest_favorable_max_tested']:,.0f}/mo)."
+        )
+    fig.text(0.10, y, threshold_text, fontsize=9.5, color=EMERALD)
+    y -= 0.024
+
     # Breakeven
-    y -= 0.03
-    fig.text(0.08, y, "Breakeven",
+    y -= 0.02
+    fig.text(0.08, y, "Breakeven Table",
              fontsize=13, color=TEXT, fontweight="bold")
     y -= 0.028
     if be.breakeven_amount is not None:
@@ -223,6 +260,31 @@ def _page1_summary(inputs: SimInputs, d: Dict, verdict_text: str,
         be_text = ("No amount up to \u00a31,000/mo beats investing "
                    "\u2014 your loan will be written off.")
     fig.text(0.10, y, be_text, fontsize=10, color=AMBER)
+
+    # Lump sum hypothetical
+    y -= 0.04
+    fig.text(0.08, y, "Hypothetical: Lump Sum Payoff",
+             fontsize=13, color="#c4b5fd", fontweight="bold")
+    y -= 0.028
+    ls_lines = [
+        f"If you had \u00a3{d['ls_lump_sum']:,.0f} in cash today:",
+        f"  Pay off now \u2192 reinvest freed \u00a3{d['ls_freed_monthly']:,.0f}/mo "
+        f"for {d['ls_years']} years \u2192 \u00a3{d['ls_payoff_fv']:,.0f}",
+        f"  Invest lump sum \u2192 \u00a3{d['ls_lump_sum']:,.0f} grows "
+        f"for {d['ls_years']} years at {d['ls_return'] * 100:.1f}% "
+        f"\u2192 \u00a3{d['ls_invest_fv']:,.0f}",
+    ]
+    ls_winner_color = EMERALD if d["ls_winner"] == "invest" else INDIGO
+    ls_winner_label = ("Investing the lump sum wins"
+                       if d["ls_winner"] == "invest" else "Paying off wins")
+    for line in ls_lines:
+        fig.text(0.10, y, line, fontsize=9, color=TEXT2)
+        y -= 0.022
+    y -= 0.005
+    fig.text(0.10, y,
+             f"{ls_winner_label} by \u00a3{d['ls_advantage']:,.0f} "
+             f"({d['ls_adv_pct']:.1f}%)",
+             fontsize=10, color=ls_winner_color, fontweight="bold")
 
     # Disclaimer
     fig.text(0.50, 0.03,
@@ -677,6 +739,98 @@ def _page5_breakeven(be: BreakevenResult,
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Lump Sum Hypothetical chart
+# ═══════════════════════════════════════════════════════════════════
+
+def _chart_lump_sum(d: Dict, figsize=(WEB_W, WEB_H - 1)) -> plt.Figure:
+    """Bar chart comparing lump sum payoff vs invest over time."""
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+    _style(fig, ax)
+
+    r = d["ls_return"]
+    T = d["ls_years"]
+    loan = d["ls_lump_sum"]
+    annual_freed = d["ls_freed_annual"]
+
+    # Build year-by-year trajectories
+    years = np.arange(T + 1)
+
+    # Invest lump sum: grows each year
+    invest_path = loan * (1 + r) ** years
+
+    # Pay off: freed mandatory invested as growing annuity
+    payoff_path = np.zeros(T + 1)
+    for t in range(1, T + 1):
+        if r > 0:
+            payoff_path[t] = annual_freed * (((1 + r) ** t - 1) / r)
+        else:
+            payoff_path[t] = annual_freed * t
+
+    ax.plot(years, invest_path, color=EMERALD, linewidth=2.5,
+            label="Invest the lump sum", solid_capstyle="round")
+    ax.fill_between(years, invest_path, alpha=0.1, color=EMERALD)
+
+    ax.plot(years, payoff_path, color=INDIGO, linewidth=2.5,
+            label="Pay off + reinvest freed payments", solid_capstyle="round")
+    ax.fill_between(years, payoff_path, alpha=0.1, color=INDIGO)
+
+    # Annotate final values
+    ax.annotate(
+        f"\u00a3{invest_path[-1]:,.0f}",
+        xy=(T, invest_path[-1]), fontsize=10, color=EMERALD,
+        fontweight="bold", ha="right",
+        xytext=(-10, 8), textcoords="offset points",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
+                  edgecolor=EMERALD, alpha=0.9),
+    )
+    ax.annotate(
+        f"\u00a3{payoff_path[-1]:,.0f}",
+        xy=(T, payoff_path[-1]), fontsize=10, color=INDIGO,
+        fontweight="bold", ha="right",
+        xytext=(-10, -18), textcoords="offset points",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
+                  edgecolor=INDIGO, alpha=0.9),
+    )
+
+    # Crossover point
+    cross_mask = (payoff_path[:-1] <= invest_path[:-1]) & (payoff_path[1:] > invest_path[1:])
+    cross_idxs = np.where(cross_mask)[0]
+    if len(cross_idxs) > 0:
+        ci = cross_idxs[0] + 1
+        ax.annotate(
+            f"Payoff overtakes\nat year {ci}",
+            xy=(ci, payoff_path[ci]), fontsize=8, color=INDIGO,
+            xytext=(10, 15), textcoords="offset points",
+            arrowprops=dict(arrowstyle="->", color=INDIGO, lw=1.2),
+            bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
+                      edgecolor=INDIGO, alpha=0.9),
+        )
+
+    # Winner callout
+    winner_color = EMERALD if d["ls_winner"] == "invest" else INDIGO
+    winner_label = ("Investing wins" if d["ls_winner"] == "invest"
+                    else "Paying off wins")
+    ax.text(
+        0.02, 0.97,
+        f"{winner_label} by \u00a3{d['ls_advantage']:,.0f}",
+        transform=ax.transAxes, fontsize=10, color=winner_color,
+        fontweight="bold", va="top",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor=BG,
+                  edgecolor=winner_color, alpha=0.92),
+    )
+
+    ax.yaxis.set_major_formatter(GBP_FMT)
+    ax.set_xlabel("Years")
+    ax.set_ylabel("Value")
+    ax.set_title(
+        f"Lump Sum Hypothetical: \u00a3{loan:,.0f} at {r * 100:.1f}% Return",
+        fontsize=13, pad=12,
+    )
+    _legend(ax, loc="lower right")
+    return fig
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Page 6 — The Big Picture (small multiples grid)
 # ═══════════════════════════════════════════════════════════════════
 
@@ -774,13 +928,14 @@ def generate_pdf(
     verdict_text: str,
     path: str = "student_loan_report.pdf",
 ) -> str:
-    """Generate the full 6-page PDF report. Returns the file path."""
+    """Generate the full PDF report. Returns the file path."""
     pages = [
         _page1_summary(inputs, d, verdict_text, be),
         _page2_tax(inputs, results),
         _page3_net_worth(inputs, results),
         _page4_loan_pot(inputs, results),
         _page5_breakeven(be),
+        _chart_lump_sum(d, figsize=(A4W, A4H * 0.55)),
     ]
     if sweep is not None:
         pages.append(_page6_big_picture(sweep, inputs))
@@ -802,17 +957,19 @@ def get_web_charts(
 ) -> List[str]:
     """Return base64-encoded PNG chart images for web embedding.
 
-    Returns exactly 4 charts focused on comparison clarity:
+    Returns 5 charts:
       [0] Net Worth Comparison  (fan chart — the hero chart)
       [1] Outcome Distribution  (histogram + KDE — shows risk)
       [2] Loan Balance & Investment Pot  (decomposition)
       [3] Breakeven Analysis  (grouped bar)
+      [4] Lump Sum Hypothetical  (payoff vs invest trajectories)
     """
     chart_figs = [
         _page3_net_worth(inputs, results, figsize=(WEB_W, WEB_H)),
         _chart_outcome_dist(inputs, results, d, figsize=(WEB_W, WEB_H - 0.5)),
         _page4_loan_pot(inputs, results, figsize=(WEB_W, WEB_H + 2)),
         _chart_breakeven_bar(be, figsize=(WEB_W, WEB_H - 1)),
+        _chart_lump_sum(d, figsize=(WEB_W, WEB_H - 1)),
     ]
 
     images = [figure_to_base64(f) for f in chart_figs]
